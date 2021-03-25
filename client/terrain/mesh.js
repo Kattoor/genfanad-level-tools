@@ -125,7 +125,7 @@ const diagb_uvs_1 = [u1, u3, u2];
 const DEFAULT_COLOR = new THREE.Color(); 
 const SHADOW_COLOR = new THREE.Color(0.7,0.7,0.7);
 
-function face(v0, v1, v2, material, shade) {
+function createFace(v0, v1, v2, material, shade) {
     let face = new THREE.Face3(v0, v1, v2);
     face.materialIndex = material;
     if (shade) {
@@ -187,74 +187,152 @@ class MeshLoader {
      * every x/y coordinate in the mesh.
      */
     prepareVertices(mesh) {
-        let geo = new THREE.Geometry();
-        let curId = 0;
+        const geometries = [];
 
-        let vertices = [];
         for (let x = 0; x <= this.metadata.wSIZE; x++) {
-            if (!mesh[x]) mesh[x] = [];
-
-            vertices[x] = [];
+            geometries[x] = [];
             for (let y = 0; y <= this.metadata.wSIZE; y++) {
-                if (!mesh[x][y]) mesh[x][y] = { color: {r:255, g:255,b:255} };
-
-                let tile = mesh[x][y];
+                const tile = mesh[x][y];
 
                 // Defaulting
-                if (!tile.draw) tile.draw = 'blend';
-                if (!tile.orientation) tile.orientation = 'diagb';
+                tile.draw ||= 'blend';
+                tile.orientation ||= 'diagb';
 
                 if (tile.color) {
                     tile.threeColor = new THREE.Color(tile.color.r / 255, tile.color.g / 255, tile.color.b / 255);
-                    tile.threeShadowColor = 
+                    tile.threeShadowColor =
                         new THREE.Color(
-                            0.7 * tile.color.r / 255, 
+                            0.7 * tile.color.r / 255,
                             0.7 * tile.color.g / 255,
                             0.7 * tile.color.b / 255);
                 } else {
-                    tile.threeColor = new THREE.Color(1.0,1.0,1.0);
-                    tile.threeShadowColor = new THREE.Color(1.0,1.0,1.0);
+                    tile.threeColor = new THREE.Color(1.0, 1.0, 1.0);
+                    tile.threeShadowColor = new THREE.Color(1.0, 1.0, 1.0);
                 }
 
                 if (tile.water) {
-                    let w = tile.water;
+                    const w = tile.water;
                     let flowX = w.flowX || 0.0;
                     let flowY = w.flowY || 0.0;
-            
+
                     // normalize vector.
-                    let len = Math.sqrt(flowX * flowX + flowY * flowY);
+                    const len = Math.sqrt(flowX * flowX + flowY * flowY);
                     flowX /= len;
                     flowY /= len;
-            
-                    let speed = w.flowSpeed || 0.0;
+
+                    const speed = w.flowSpeed || 0.0;
                     flowX *= speed;
                     flowY *= speed;
 
                     tile.waterFlow = [flowX, flowY];
-            
-                    let depth = w.depth || 0;
-            
-                    let r = 128 + Math.floor(127 * flowX / WATER_ENCODE_RANGE);
-                    let g = 128 + Math.floor(127 * flowY / WATER_ENCODE_RANGE);
-                    let b = Math.floor(255 * w.depth / 3.0);
+
+                    const depth = w.depth || 0;
+
+                    const r = 128 + Math.floor(127 * flowX / WATER_ENCODE_RANGE);
+                    const g = 128 + Math.floor(127 * flowY / WATER_ENCODE_RANGE);
+                    const b = Math.floor(255 * w.depth / 3.0);
 
                     tile.threeWaterColor = new THREE.Color(r / 255.0, g / 255.0, b / 255.0, 1.0);
                 } else {
-                    tile.threeWaterColor = new THREE.Color(1.0,1.0,1.0)
+                    tile.threeWaterColor = new THREE.Color(1.0, 1.0, 1.0)
                 }
 
-                if (!tile.color && !tile.texture1 && !tile.texture2) tile.draw = 'none';
+                if (!tile.color && !tile.texture1 && !tile.texture2) {
+                    tile.draw = 'none';
+                }
 
-                let pos = new THREE.Vector3(x, tile.elevation || 0.0, y);
+                const pos = {
+                    bottomLeft: new THREE.Vector3(x, tile.elevation || 0.0, y + 1),
+                    topLeft: new THREE.Vector3(x, tile.elevation || 0.0, y),
+                    bottomRight: new THREE.Vector3(x + 1, tile.elevation || 0.0, y + 1),
+                    topRight: new THREE.Vector3(x + 1, tile.elevation || 0.0, y)
+                };
+
+                geometries[x][y] = new THREE.Geometry();
+                geometries[x][y].vertices.push(pos.topLeft, pos.topRight, pos.bottomLeft, pos.bottomRight);
+            }
+        }
+
+        return geometries;
+
+
+
+        /*const geometry = new THREE.Geometry();
+        let curId = 0;
+
+        const vertices = [];
+        for (let x = 0; x <= this.metadata.wSIZE; x++) {
+            if (!mesh[x]) {
+                mesh[x] = [];
+            }
+
+            vertices[x] = [];
+
+            for (let y = 0; y <= this.metadata.wSIZE; y++) {
+                if (!mesh[x][y]) {
+                    mesh[x][y] = { color: {r:255, g:255,b:255} };
+                }
+
+                const tile = mesh[x][y];
+
+                // Defaulting
+                tile.draw ||= 'blend';
+                tile.orientation ||= 'diagb';
+
+                if (tile.color) {
+                    tile.threeColor = new THREE.Color(tile.color.r / 255, tile.color.g / 255, tile.color.b / 255);
+                    tile.threeShadowColor =
+                        new THREE.Color(
+                            0.7 * tile.color.r / 255,
+                            0.7 * tile.color.g / 255,
+                            0.7 * tile.color.b / 255);
+                } else {
+                    tile.threeColor = new THREE.Color(1.0, 1.0, 1.0);
+                    tile.threeShadowColor = new THREE.Color(1.0, 1.0, 1.0);
+                }
+
+                if (tile.water) {
+                    const w = tile.water;
+                    let flowX = w.flowX || 0.0;
+                    let flowY = w.flowY || 0.0;
+
+                    // normalize vector.
+                    const len = Math.sqrt(flowX * flowX + flowY * flowY);
+                    flowX /= len;
+                    flowY /= len;
+
+                    const speed = w.flowSpeed || 0.0;
+                    flowX *= speed;
+                    flowY *= speed;
+
+                    tile.waterFlow = [flowX, flowY];
+
+                    const depth = w.depth || 0;
+
+                    const r = 128 + Math.floor(127 * flowX / WATER_ENCODE_RANGE);
+                    const g = 128 + Math.floor(127 * flowY / WATER_ENCODE_RANGE);
+                    const b = Math.floor(255 * w.depth / 3.0);
+
+                    tile.threeWaterColor = new THREE.Color(r / 255.0, g / 255.0, b / 255.0, 1.0);
+                } else {
+                    tile.threeWaterColor = new THREE.Color(1.0, 1.0, 1.0)
+                }
+
+                if (!tile.color && !tile.texture1 && !tile.texture2) {
+                    tile.draw = 'none';
+                }
+
+                const pos = new THREE.Vector3(x, tile.elevation || 0.0, y);
 
                 vertices[x][y] = { 
                     vector: pos,
                     index: curId++
                 };
-                geo.vertices.push(pos);
+
+                geometry.vertices.push(pos);
             }
         }
-        return { geometry: geo, vertices: vertices };
+        return { geometry, vertices };*/
     }
 
     materialIndex(materials, materialMap, type, texture, prefix) {
@@ -321,8 +399,121 @@ class MeshLoader {
      * Iterates over all tiles and actually creates the terrain faces
      * for those tiles.
      */
-    populateGeometry(tiles, preparedVertices) {
-        // Keep track of which material each texutre corresponds to.
+    populateGeometry(tiles, geometries) {
+        const materials = [
+            new THREE.MeshLambertMaterial( {
+                vertexColors: THREE.VertexColors,
+                side: THREE.FrontSide
+            })
+        ];
+        const materialMap = {};
+
+        const meshes = [];
+
+        for (let x = 0; x < this.metadata.wSIZE; x++) {
+            for (let y = 0; y < this.metadata.wSIZE; y++) {
+                const tile = tiles[x][y];
+                const geometry = geometries[x][y];
+
+                if (tile.draw === 'none') continue;
+
+                const getIndex = (x, y) => x * this.metadata.wSIZE + y;
+
+                let v00 = 0; //topleft
+                let v10 = 1; //bottomleft
+                let v01 = 2; //topright
+                let v11 = 3; //bottomright
+
+                let face1, face2;
+
+                const material1 = this.materialIndex(materials, materialMap, 'lambert', tile.texture1, 'buildings/floors/');
+                const material2 = this.materialIndex(materials, materialMap, 'lambert', tile.texture2, 'buildings/floors/');
+
+                const vertexColors = this.computeVertexColors(tiles[x][y], tiles[x][y+1], tiles[x+1][y], tiles[x+1][y+1]);
+
+                const draw1 = !(material1 === 0 && !tile.color);
+                const draw2 = !(material2 === 0 && !tile.color);
+
+                if (tile.orientation === 'diaga') {
+                    face1 = new THREE.Face3(v00, v01, v11);
+                    face2 = new THREE.Face3(v00, v11, v10);
+
+                    const prefix1 = tile.texture1 === 'water.png' ? "w" : material1 === 0 ? "" : "t";
+                    face1.vertexColors[0] = vertexColors[prefix1 + "00"];
+                    face1.vertexColors[1] = vertexColors[prefix1 + "01"];
+                    face1.vertexColors[2] = vertexColors[prefix1 + "11"];
+
+                    const prefix2 = tile.texture2 === 'water.png' ? "w" : material2 === 0 ? "" : "t";
+                    face2.vertexColors[0] = vertexColors[prefix2 + "00"];
+                    face2.vertexColors[1] = vertexColors[prefix2 + "11"];
+                    face2.vertexColors[2] = vertexColors[prefix2 + "10"];
+
+                    if (draw1) {
+                        geometry.faceVertexUvs[0].push(diaga_uvs_0);
+                    }
+
+                    if (draw2) {
+                        geometry.faceVertexUvs[0].push(diaga_uvs_1);
+                    }
+                } else {
+                    face1 = new THREE.Face3(v00, v01, v10);
+                    face2 = new THREE.Face3(v10, v01, v11);
+
+                    const prefix1 = tile.texture1 === 'water.png' ? "w" : material1 === 0 ? "" : "t";
+                    face1.vertexColors[0] = vertexColors[prefix1 + "00"];
+                    face1.vertexColors[1] = vertexColors[prefix1 + "01"];
+                    face1.vertexColors[2] = vertexColors[prefix1 + "10"];
+
+                    const prefix2 = tile.texture2 === 'water.png' ? "w" : material2 === 0 ? "" : "t";
+                    face2.vertexColors[0] = vertexColors[prefix2 + "10"];
+                    face2.vertexColors[1] = vertexColors[prefix2 + "01"];
+                    face2.vertexColors[2] = vertexColors[prefix2 + "11"];
+
+                    if (draw1) {
+                        geometry.faceVertexUvs[0].push(diagb_uvs_0);
+                    }
+
+                    if (draw2) {
+                        geometry.faceVertexUvs[0].push(diagb_uvs_1);
+                    }
+                }
+
+                face1.materialIndex = material1;
+                face2.materialIndex = material2;
+
+                const flow = [];
+
+                if (draw1) {
+                    geometry.faces.push(face1);
+                    for (let i = 0; i < 3; i++) {
+                        flow.push(tile.waterFlow ? tile.waterFlow[0] : 0.0);
+                        flow.push(tile.waterFlow ? tile.waterFlow[1] : 0.0);
+                    }
+                }
+
+                if (draw2) {
+                    geometry.faces.push(face2);
+                    for (let i = 0; i < 3; i++) {
+                        flow.push(tile.waterFlow ? tile.waterFlow[0] : 0.0);
+                        flow.push(tile.waterFlow ? tile.waterFlow[1] : 0.0);
+                    }
+                }
+
+                geometry.computeFaceNormals();
+                geometry.computeVertexNormals();
+
+                const bufferGeometry = new THREE.BufferGeometry().fromGeometry(geometry);
+                bufferGeometry.addAttribute('flow', new THREE.Float32BufferAttribute(Float32Array.from(flow), 2));
+
+                const mesh = new THREE.Mesh(bufferGeometry, materials);
+                mesh.matrixAutoUpdate = false;
+
+                meshes.push(mesh);
+            }
+        }
+
+        return meshes;
+        /*// Keep track of which material each texutre corresponds to.
         let materials = [];
         let materialMap = {};
         materials.push(new THREE.MeshLambertMaterial( { 
@@ -359,7 +550,7 @@ class MeshLoader {
                 let draw2 = true;
 
                 if (material1 == 0 && !tile.color) draw1 = false;
-                if (material2 == 0 && !tile.color) draw2 = false; 
+                if (material2 == 0 && !tile.color) draw2 = false;
 
                 if (tile.orientation == 'diaga') {
                     face1 = new THREE.Face3(v00,v01,v11);
@@ -374,7 +565,7 @@ class MeshLoader {
                     face2.vertexColors[0] = vertexColors[prefix2 + "00"];
                     face2.vertexColors[1] = vertexColors[prefix2 + "11"];
                     face2.vertexColors[2] = vertexColors[prefix2 + "10"];
-                    
+
                     if (draw1) {
                         geometry.faceVertexUvs[0].push(diaga_uvs_0);
                     }
@@ -384,7 +575,7 @@ class MeshLoader {
                 } else {
                     face1 = new THREE.Face3(v00,v01,v10);
                     face2 = new THREE.Face3(v10,v01,v11);
-                    
+
                     let prefix1 = tile.texture1 == 'water.png' ? "w" : material1 == 0 ? "" : "t";
                     face1.vertexColors[0] = vertexColors[prefix1 + "00"];
                     face1.vertexColors[1] = vertexColors[prefix1 + "01"];
@@ -397,7 +588,7 @@ class MeshLoader {
 
                     if (draw1) {
                         geometry.faceVertexUvs[0].push(diagb_uvs_0);
-                    } 
+                    }
                     if (draw2) {
                         geometry.faceVertexUvs[0].push(diagb_uvs_1);
                     }
@@ -412,7 +603,7 @@ class MeshLoader {
                         flow.push(tile.waterFlow ? tile.waterFlow[0] : 0.0);
                         flow.push(tile.waterFlow ? tile.waterFlow[1] : 0.0);
                     }
-                } 
+                }
                 if (draw2) {
                     geometry.faces.push(face2);
                     for (let i = 0; i < 3; i++) {
@@ -431,115 +622,110 @@ class MeshLoader {
 
         let mesh = new THREE.Mesh(buffergeometry, materials);
         mesh.matrixAutoUpdate = false;
-        return mesh;
+        return mesh;*/
+    }
+
+    _getWallDrawingData(position, tile, tiles, x, y, heightOffset, invert) {
+        let startTile;
+        let endTile;
+        let shade;
+
+        if (position === 'plusx' && x < this.metadata.wSIZE) {
+            startTile = tile;
+            endTile = tiles[x + 1][y];
+            shade = DEFAULT_COLOR;
+        } else if (position === 'plusy' && y < this.metadata.wSIZE) {
+            startTile = tile;
+            endTile = tiles[x][y + 1];
+            shade = SHADOW_COLOR;
+        } else if (position === 'diaga' && x < this.metadata.wSIZE && y < this.metadata.wSIZE) {
+            startTile = tile;
+            endTile = tiles[x + 1][y + 1];
+            shade = DEFAULT_COLOR;
+        } else if (position === 'diagb' && x < this.metadata.wSIZE && y < this.metadata.wSIZE) {
+            startTile = tiles[x + 1][y];
+            endTile = tiles[x][y + 1];
+            shade = SHADOW_COLOR;
+        }
+
+        if (invert) {
+            [startTile, endTile] = [endTile, startTile];
+        }
+
+        return {
+            location: {
+                bottomLeft: new THREE.Vector3(startTile.x, (startTile.elevation || 0.0) + heightOffset, startTile.y),
+                topLeft: new THREE.Vector3(startTile.x, (startTile.elevation || 0.0) + heightOffset + WALL_HEIGHT, startTile.y),
+                bottomRight: new THREE.Vector3(endTile.x, (endTile.elevation || 0.0) + heightOffset, endTile.y),
+                topRight: new THREE.Vector3(endTile.x, (endTile.elevation || 0.0) + heightOffset + WALL_HEIGHT, endTile.y)
+            },
+            shade
+        };
+    }
+
+    _drawWall(location, shade, material, geometry, id) {
+        geometry.vertices.push(location.bottomLeft, location.topLeft, location.bottomRight, location.topRight);
+        const vertexIds = {bottomLeft: id, topLeft: id + 1, bottomRight: id + 2, topRight: id + 3};
+        const face1 = createFace(vertexIds.bottomLeft, vertexIds.bottomRight, vertexIds.topLeft, material, shade);
+        const face2 = createFace(vertexIds.topRight, vertexIds.bottomRight, vertexIds.topLeft, material, shade);
+        geometry.faces.push(face1, face2);
+        geometry.faceVertexUvs[0].push([u0, u1, u3], [u2, u1, u3]);
     }
 
     generateWalls(tiles, name, yOff, W) {
-        let materials = [];
-        materials.push(new THREE.MeshLambertMaterial( { 
-            vertexColors: THREE.VertexColors,
-            side: THREE.FrontSide,
-            //wireframe: true,
-        }));
-        let materialMap = {};
+        const materials = [
+            new THREE.MeshLambertMaterial({
+                vertexColors: THREE.VertexColors,
+                side: THREE.FrontSide
+            })
+        ];
 
-        // Precompute the materials and tiles.
-        let protofaces = {};
+        const materialMap = {};
+
+        const wallDrawingDataGroupedByTexture = {};
         for (let x = 0; x <= this.metadata.wSIZE; x++) {
             for (let y = 0; y <= this.metadata.wSIZE; y++) {
-                let tile = tiles[x][y];
-                tile.x = x;
-                tile.y = y;
-    
-                if (!tile.buildings) continue;
-                if (!tile.buildings[name]) continue;
-    
-                if (tile.buildings[name].walls) {
-                    for (let i in tile.buildings[name].walls) {
-                        let w = tile.buildings[name].walls[i];
-                        let p = this.walls[w.type];
-    
-                        // "color" tiles that need wall vertices defined.
-                        if (p && p.type == 'polygon') {
-                            if (!protofaces[p.texture]) protofaces[p.texture] = [];
-    
-                            let protoface;
-                            if (w.position == 'plusx' && x < this.metadata.wSIZE) {
-                                protoface = [tile, tiles[x+1][y], 'light'] ;
-                            } else if (w.position == 'plusy' && y < this.metadata.wSIZE) {
-                                protoface = [tile, tiles[x][y+1], 'dark'] ;
-                            } else if (w.position == 'diaga' && x < this.metadata.wSIZE && y < this.metadata.wSIZE) {
-                                protoface = [tile, tiles[x+1][y+1], 'light'] ;
-                            } else if (w.position == 'diagb' && x < this.metadata.wSIZE && y < this.metadata.wSIZE) {
-                                protoface = [tiles[x+1][y], tiles[x][y+1], 'dark'] ;
-                            }
+                const tile = tiles[x][y];
 
-                            if (w.invert) {
-                                protofaces[p.texture].push([protoface[1], protoface[0], protoface[2]]);
-                            } else {
-                                protofaces[p.texture].push(protoface);
-                            }
+                tile.buildings?.[name]?.walls
+                    ?.forEach(({type: wallTypeName, position, invert}) => {
+                        const {type, texture} = this.walls[wallTypeName];
+
+                        if (type === 'polygon') {
+                            wallDrawingDataGroupedByTexture[texture] ||= [];
+                            wallDrawingDataGroupedByTexture[texture].push(this._getWallDrawingData(position, tile, tiles, x, y, yOff, invert));
                         }
-                    }
-                }
+                    });
             }
         }
-    
-        // Generate the vertices
-        let geometry = new THREE.Geometry();
+
+        const geometryToDrawTo = new THREE.Geometry();
         let id = 0;
-    
-        for (let type in protofaces) {
-            let pf = protofaces[type];
 
-            // todo: add prefix walls/
-            let material = this.materialIndex(materials, materialMap, 'basic', type, 'buildings/');
+        Object.entries(wallDrawingDataGroupedByTexture)
+            .forEach(([texture, wallDrawingData]) => {
+                const material = this.materialIndex(materials, materialMap, 'basic', texture, 'buildings/');
+                wallDrawingData.forEach(wall => {
+                    this._drawWall(wall.location, wall.shade, material, geometryToDrawTo, id);
+                    id += 4;
+                });
+            });
 
-            for (let i in pf) {
-                let t0 = pf[i][0];
-                let t1 = pf[i][1];
-
-                if (!t0.elevation) t0.elevation = 0.0;
-                if (!t1.elevation) t1.elevation = 0.0;
-    
-                geometry.vertices.push(new THREE.Vector3(t0.x, t0.elevation + yOff, t0.y));
-                let i1 = id++;
-    
-                geometry.vertices.push(new THREE.Vector3(t0.x, t0.elevation + yOff + WALL_HEIGHT, t0.y));
-                let i2 = id++;
-    
-                geometry.vertices.push(new THREE.Vector3(t1.x, t1.elevation + yOff, t1.y));
-                let i3 = id++;
-    
-                geometry.vertices.push(new THREE.Vector3(t1.x, t1.elevation + yOff + WALL_HEIGHT, t1.y));
-                let i4 = id++;
-
-                // i1 -> (0,0) -> u0, i2 -> (0,1) -> u3, i3 -> (1,0) -> u1, i4 -> (1,1) -> u2
-                geometry.faces.push(face(i1, i3, i2, material, 
-                    pf[i][2] == 'dark' ? SHADOW_COLOR : DEFAULT_COLOR));
-                geometry.faceVertexUvs[0].push([u0,u1,u3]);
-    
-                geometry.faces.push(face(i4, i3, i2, material, 
-                    pf[i][2] == 'dark' ? SHADOW_COLOR : DEFAULT_COLOR));
-                geometry.faceVertexUvs[0].push([u2,u1,u3]);
-            }
-        }
-
-        let mesh = new THREE.Mesh(new THREE.BufferGeometry().fromGeometry(geometry), materials);
+        const mesh = new THREE.Mesh(new THREE.BufferGeometry().fromGeometry(geometryToDrawTo), materials);
         mesh.matrixAutoUpdate = false;
         W.add(mesh);
     }
     
     generateCollisionVisualization(tiles) {
-        let geo = new THREE.Geometry();
-        let vertices = geo.vertices;
+        const geo = new THREE.Geometry();
+        const vertices = geo.vertices;
 
         let c = 0;
 
         for (let x = 0; x < this.metadata.wSIZE; x++) {
             for (let y = 0; y < this.metadata.wSIZE; y++) {
-                let tile = tiles[x][y];
-                let pos = new THREE.Vector3(x, 0.05 + (tile.elevation || 0.0), y);
+                const tile = tiles[x][y];
+                const pos = new THREE.Vector3(x, 0.05 + (tile.elevation || 0.0), y);
                 vertices.push(pos);
                 tile.vertex = c++;
             }
@@ -547,22 +733,21 @@ class MeshLoader {
 
         for (let x = 0; x < this.metadata.wSIZE; x++) {
             for (let y = 0; y < this.metadata.wSIZE; y++) {
-                let tile = tiles[x][y];
+                const tile = tiles[x][y];
 
                 if (!tile.walkabilityOverriden) {
                     continue;
                 }
 
-                let v00 = tiles[x][y].vertex;
-                let v10 = tiles[x + 1][y].vertex;
-                let v11 = tiles[x + 1][y + 1].vertex;
-                let v01 = tiles[x][y + 1].vertex;
+                const v00 = tiles[x][y].vertex;
+                const v10 = tiles[x + 1][y].vertex;
+                const v11 = tiles[x + 1][y + 1].vertex;
+                const v01 = tiles[x][y + 1].vertex;
 
-                if (v00 === undefined || v10 === undefined ||
-                    v11 === undefined || v01 === undefined) continue;
+                if (v00 === undefined || v10 === undefined || v11 === undefined || v01 === undefined) continue;
 
                 let face1, face2;
-                if (tile.orientation == 'diaga') {
+                if (tile.orientation === 'diaga') {
                     face1 = new THREE.Face3(v00,v01,v11);
                     face2 = new THREE.Face3(v00,v11,v10);
                 } else {
@@ -575,25 +760,24 @@ class MeshLoader {
             }
         }
 
-        let buffergeometry = new THREE.BufferGeometry().fromGeometry(geo);
-        return buffergeometry;
+        return new THREE.BufferGeometry().fromGeometry(geo);
     }
 
     isRoof(tile, name) {
         if (!tile.buildings) return false;
         if (!tile.buildings[name]) return false;
-        if (tile.buildings[name].roof || tile.buildings[name].walls) return true;
-        return false;
+        return !!(tile.buildings[name].roof || tile.buildings[name].walls);
+
     }
 
     roofPosition(tiles,level,x,y) {
-        let tile = tiles[x][y];
+        const tile = tiles[x][y];
+
         if (!tile.buildings) return undefined;
         if (!tile.buildings[level]) return undefined;
         if (!tile.buildings[level].roof) return undefined;
-        
-        let e = tile.buildings[level].roof.position;
-        return e;
+
+        return tile.buildings[level].roof.position;
     }
 
     // Returns true if the roof is an 'edge' or 'inner' point
@@ -634,8 +818,6 @@ class MeshLoader {
         for (let x = 0; x <= this.metadata.wSIZE; x++) {
             for (let y = 0; y <= this.metadata.wSIZE; y++) {
                 let tile = tiles[x][y];
-                tile.x = x;
-                tile.y = y;
 
                 if (!tile.buildings) continue;
                 if (!tile.buildings[name]) continue;
@@ -682,10 +864,10 @@ class MeshLoader {
                     //console.log([ecount, e0, e1, e2, e3]);
                     if (flipFaces) {
                         if (e0 && e1 && e3) {
-                            geometry.faces.push(face(A, B, D, topIndex));
+                            geometry.faces.push(createFace(A, B, D, topIndex));
                             geometry.faceVertexUvs[0].push([u0, u1, u3]);
                         } else {
-                            geometry.faces.push(face(A, B, D, sideIndex));
+                            geometry.faces.push(createFace(A, B, D, sideIndex));
                             if (ecount == 3) {
                                 geometry.faceVertexUvs[0].push([u0, uHalfLeft, uHalf]);
                             } else if (e3) {
@@ -698,10 +880,10 @@ class MeshLoader {
                         }
 
                         if (e1 && e2 && e3) {
-                            geometry.faces.push(face(B, C, D, topIndex));
+                            geometry.faces.push(createFace(B, C, D, topIndex));
                             geometry.faceVertexUvs[0].push([u1, u2, u3]);
                         } else {
-                            geometry.faces.push(face(B, C, D, sideIndex));
+                            geometry.faces.push(createFace(B, C, D, sideIndex));
                             if (ecount == 3) {
                                 geometry.faceVertexUvs[0].push([uHalf, u0,uHalfLeft]);
                             } else if (e1) {
@@ -714,10 +896,10 @@ class MeshLoader {
                         }
                     } else {
                         if (e0 && e1 && e2) {
-                            geometry.faces.push(face(A, B, C,topIndex));
+                            geometry.faces.push(createFace(A, B, C,topIndex));
                             geometry.faceVertexUvs[0].push([u0, u1, u2]);
                         } else {
-                            geometry.faces.push(face(A, B, C,sideIndex));
+                            geometry.faces.push(createFace(A, B, C,sideIndex));
                             if (ecount == 1) {
                                 if (e0) {
                                     geometry.faceVertexUvs[0].push([u2,u1,u0]);   
@@ -748,10 +930,10 @@ class MeshLoader {
                         }
 
                         if (e0 && e2 && e3) {
-                            geometry.faces.push(face(A, C, D, topIndex));
+                            geometry.faces.push(createFace(A, C, D, topIndex));
                             geometry.faceVertexUvs[0].push([u0, u2, u3]);
                         } else {
-                            geometry.faces.push(face(A, C, D, sideIndex));
+                            geometry.faces.push(createFace(A, C, D, sideIndex));
                             if (ecount == 1) {
                                 if (e0) {
                                     geometry.faceVertexUvs[0].push([u3, u1, u0]);
@@ -782,16 +964,16 @@ class MeshLoader {
                         }
                     }
                 } else if (tile.buildings[name].roof.position == 'tl') {
-                    geometry.faces.push(face(A, B, D, sideIndex));
+                    geometry.faces.push(createFace(A, B, D, sideIndex));
                     geometry.faceVertexUvs[0].push([uHalf, u1, u0]);
                 } else if (tile.buildings[name].roof.position == 'tr') {
-                    geometry.faces.push(face(A, B, C, sideIndex));
+                    geometry.faces.push(createFace(A, B, C, sideIndex));
                     geometry.faceVertexUvs[0].push([u0, uHalf, u1]);
                 } else if (tile.buildings[name].roof.position == 'bl') {
-                    geometry.faces.push(face(A, C, D, sideIndex));
+                    geometry.faces.push(createFace(A, C, D, sideIndex));
                     geometry.faceVertexUvs[0].push([u1, u0, uHalf]);
                 } else if (tile.buildings[name].roof.position == 'br') {
-                    geometry.faces.push(face(B, C, D, sideIndex));
+                    geometry.faces.push(createFace(B, C, D, sideIndex));
                     geometry.faceVertexUvs[0].push([u0, uHalf, u1]);
                 }
             }
@@ -803,54 +985,58 @@ class MeshLoader {
     }
 
     generateFloors(tiles, name, yOff, W) {
-        let materials = [];
-        materials.push(new THREE.MeshLambertMaterial( { 
-            vertexColors: THREE.VertexColors,
-            side: THREE.FrontSide,
-            //wireframe: true,
-        }));
-        let materialMap = {};
+        const materials = [
+            new THREE.MeshLambertMaterial({
+                vertexColors: THREE.VertexColors,
+                side: THREE.FrontSide
+            })
+        ];
 
-        let geometry = new THREE.Geometry();
+        const materialMap = {};
+
+        const geometry = new THREE.Geometry();
         let curId = 0;
-        for (let x = 0; x <= this.metadata.wSIZE; x++) for (let y = 0; y <= this.metadata.wSIZE; y++) {
-            let tile = tiles[x][y];
-            tile.x = x;
-            tile.y = y;
 
-            if (!tile.buildings) continue;
-            if (!tile.buildings[name]) continue;
-            if (!tile.buildings[name].floor) continue;
-            let floor = tile.buildings[name].floor;
+        for (let x = 0; x <= this.metadata.wSIZE; x++) {
+            for (let y = 0; y <= this.metadata.wSIZE; y++) {
+                const tile = tiles[x][y];
+                const floor = tile.buildings?.[name]?.floor;
 
-            geometry.vertices.push(new THREE.Vector3(x, tile.elevation + yOff, y)); let v00 = curId++;
-            geometry.vertices.push(new THREE.Vector3(x+1, tile.elevation + yOff, y)); let v10 = curId++;
-            geometry.vertices.push(new THREE.Vector3(x+1, tile.elevation + yOff, y+1)); let v11 = curId++;
-            geometry.vertices.push(new THREE.Vector3(x, tile.elevation + yOff, y+1)); let v01 = curId++;
+                if (!floor) continue;
 
-            let material1 = this.materialIndex(materials, materialMap, 'basic', floor.texture1, 'buildings/floors/');
-            let material2 = this.materialIndex(materials, materialMap, 'basic', floor.texture2, 'buildings/floors/');
+                geometry.vertices.push(new THREE.Vector3(x, tile.elevation + yOff, y));
+                let v00 = curId++;
+                geometry.vertices.push(new THREE.Vector3(x + 1, tile.elevation + yOff, y));
+                let v10 = curId++;
+                geometry.vertices.push(new THREE.Vector3(x + 1, tile.elevation + yOff, y + 1));
+                let v11 = curId++;
+                geometry.vertices.push(new THREE.Vector3(x, tile.elevation + yOff, y + 1));
+                let v01 = curId++;
 
-            let face1, face2;
-            if (floor.orientation == 'diaga') {
-                face1 = new THREE.Face3(v00,v01,v11);
-                face2 = new THREE.Face3(v00,v11,v10);
+                let material1 = this.materialIndex(materials, materialMap, 'basic', floor.texture1, 'buildings/floors/');
+                let material2 = this.materialIndex(materials, materialMap, 'basic', floor.texture2, 'buildings/floors/');
 
-                if (material1) geometry.faceVertexUvs[0].push(diaga_uvs_0);
-                if (material2) geometry.faceVertexUvs[0].push(diaga_uvs_1);
-            } else {
-                face1 = new THREE.Face3(v00,v01,v10);
-                face2 = new THREE.Face3(v10,v01,v11);
-                
-                if (material1) geometry.faceVertexUvs[0].push(diagb_uvs_0);
-                if (material2) geometry.faceVertexUvs[0].push(diagb_uvs_1);
+                let face1, face2;
+                if (floor.orientation === 'diaga') {
+                    face1 = new THREE.Face3(v00, v01, v11);
+                    face2 = new THREE.Face3(v00, v11, v10);
+
+                    if (material1) geometry.faceVertexUvs[0].push(diaga_uvs_0);
+                    if (material2) geometry.faceVertexUvs[0].push(diaga_uvs_1);
+                } else {
+                    face1 = new THREE.Face3(v00, v01, v10);
+                    face2 = new THREE.Face3(v10, v01, v11);
+
+                    if (material1) geometry.faceVertexUvs[0].push(diagb_uvs_0);
+                    if (material2) geometry.faceVertexUvs[0].push(diagb_uvs_1);
+                }
+
+                face1.materialIndex = material1;
+                face2.materialIndex = material2;
+
+                if (material1) geometry.faces.push(face1);
+                if (material2) geometry.faces.push(face2);
             }
-
-            face1.materialIndex = material1;
-            face2.materialIndex = material2;
-
-            if (material1) geometry.faces.push(face1);
-            if (material2) geometry.faces.push(face2);
         }
 
         let mesh = new THREE.Mesh(geometry, materials);
@@ -861,10 +1047,20 @@ class MeshLoader {
     generateLevel(tiles, level, group) {
         let name = "level" + level; // 0-3
         let yOff = level * WALL_HEIGHT;
-    
+
+        // todo jasper
+        // seems like ground floor is not in here, all other floors are though
         this.generateFloors(tiles, name, yOff, group);
         this.generateWalls(tiles, name, yOff, group);
         this.generateRoofs(tiles, name, yOff, group);
+    }
+
+    setTilePositions(tiles) {
+        for (let x = 0; x <= this.metadata.wSIZE; x++) {
+            for (let y = 0; y <= this.metadata.wSIZE; y++) {
+                Object.assign(tiles[x][y], {x, y});
+            }
+        }
     }
 
     // Creates the level meshes in the walls and roofs groups.
@@ -882,29 +1078,34 @@ class MeshLoader {
         if (!this.walls) throw "Wall definitions missing."
         if (!this.roofs) throw "Roof definitions missing."
 
-        let preparedVertices = this.prepareVertices(mesh);
-        let threeMesh = this.populateGeometry(mesh, preparedVertices);
+        /* For floor on ground level */
+        //let preparedVertices = this.prepareVertices(mesh);
+        const tileGeometries = this.prepareVertices(mesh);
+        const tileMeshes = this.populateGeometry(mesh, tileGeometries);
+        //let threeMesh = this.populateGeometry(mesh, preparedVertices);
 
-        let geo = new THREE.WireframeGeometry(threeMesh.geometry);
-        let mat = new THREE.LineBasicMaterial( { 
-            color: 0x000000,
-         } );
-        let wireframe = new THREE.LineSegments( geo, mat );
+        //let geo = new THREE.WireframeGeometry(threeMesh.geometry);
+        //let mat = new THREE.LineBasicMaterial({color: 0x000000});
+        //let wireframe = new THREE.LineSegments(geo, mat);
 
-        let col_geo = this.generateCollisionVisualization(mesh, preparedVertices);
-        let col_mat = new THREE.MeshBasicMaterial( {
-            color: 0xff0000
-        })
-        let collision = new THREE.Mesh(col_geo, col_mat);
+        //let col_geo = this.generateCollisionVisualization(mesh, preparedVertices);
+        //let col_mat = new THREE.MeshBasicMaterial({color: 0xff0000});
+        //let collision = new THREE.Mesh(col_geo, col_mat);
 
         let walls = new THREE.Group();
         let roofs = new THREE.Group();
+        this.setTilePositions(mesh);
         this.generateBuildings(mesh, walls, roofs);
 
-        if (params.offset) {
+        // todo jasper removed
+        /*if (params.offset) {
             let x = params.offset.mx * this.metadata.wSIZE;
             let z = params.offset.my * this.metadata.wSIZE;
             let k = params.offset.mx + "," + params.offset.my;
+            tileMeshes.forEach((tileMesh, index) => {
+                tileMesh.name = 'mesh-' + k + '' + index;
+                tileMesh.position.set(x, 0, z);
+            });
             threeMesh.name = "mesh-" + k;
             threeMesh.position.set(x, 0, z);
             threeMesh.updateMatrix();
@@ -916,10 +1117,10 @@ class MeshLoader {
             roofs.position.set(x, 0, z);
             roofs.name = "roofs-" + k;
             roofs.updateMatrix();
-        }
+        }*/
 
         return {
-            terrain: new TerrainMesh(this.metadata, params, mesh, threeMesh, walls, roofs, wireframe, collision)
+            terrain: new TerrainMesh(this.metadata, params, mesh, tileMeshes, walls, roofs, null, null)
         }
     }
 }

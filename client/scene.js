@@ -71,10 +71,18 @@ class Scene {
             if (this.features[f].visible && !this.visibleLayers[f]) {
                 this.scene.remove(this.features[f].instance);
                 this.features[f].visible = false;
-            }
+            }//layer-terrain layer-walls layer-roofs layer-scenery-trees
             if (!this.features[f].visible && this.visibleLayers[f]) {
-                this.scene.add(this.features[f].instance);
-                this.features[f].visible = true;
+                if (f !== 'layer-terrain') { // jasper todo I put this here to test..
+                    // here we draw everything
+                    // todo: this.features[f].instance contains a Mesh right now (all individual parts are renderer as one large mesh)
+                    // todo: can we change this to an array of all individual meshes so we could change this later without having to redraw the full mesh?
+                    this.scene.add(this.features[f].instance);
+                    this.features[f].visible = true;
+                } else if (f === 'layer-terrain') {
+                    this.features[f].instance.forEach(tileMesh => this.scene.add(tileMesh));
+                    this.features[f].visible = true;
+                }
             }
         }
     }
